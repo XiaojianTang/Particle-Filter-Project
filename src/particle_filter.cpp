@@ -84,20 +84,15 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
    *   during the updateWeights phase.
    */
 
-  vector<LandmarkObs> associated; 
   double dist_= INFINITY;
-  double x_,y_;
-
-  for(int i=0;i<predicted.size();i++){
-    for(int j=0;j<observations.size();j++){
-      if(dist(predicted[i].x,predicted[i].y,observations[j].x,observations[j].y)<dist_){
+  
+  for(int i=0;i<observations.size();i++){
+    for(int j=0;j<predicted.size();j++){
+      if(dist(predicted[j].x,predicted[j].y,observations[i].x,observations[i].y)<dist_){
         dist_ = dist(predicted[j].x,predicted[j].y,observations[i].x,observations[i].y);
-        x_=observations[j].x;
-        y_=observations[j].y;  
+        observations[i].id = predicted[j].id;        
       }     
     }
-    predicted[i].x=x_;
-    predicted[i].y=y_;
   }  
 }
 
@@ -142,9 +137,11 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
       t_obs[j].id=observations[j].id;      
     }
 
+    
+
     //data associate
     dataAssociation(predicted,t_obs);
-
+    
     
     //calculate particle weight
   
