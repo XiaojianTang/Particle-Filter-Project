@@ -84,10 +84,21 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
    *   during the updateWeights phase.
    */
 
-  for(int i=0;i<observations.size();i++){
-    
-  }
+  vector<LandmarkObs> associated; 
+  double dist_= INFINITY;
+  double x_,y_;
 
+  for(int i=0;i<predicted.size();i++){
+    for(int j=0;j<observations.size();j++){
+      if(dist(predicted[i].x,predicted[i].y,observations[j].x,observations[j].y)<dist_){
+        dist_ = dist(predicted[j].x,predicted[j].y,observations[i].x,observations[i].y);
+        x_=observations[j].x;
+        y_=observations[j].y;  
+      }     
+    }
+    predicted[i].x=x_;
+    predicted[i].y=y_;
+  }  
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
@@ -107,6 +118,51 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
    *   (look at equation 3.33) http://planning.cs.uiuc.edu/node99.html
    */
 
+  
+  vector<LandmarkObs> predicted;
+  vector<LandmarkObs> t_obs;
+
+  for (int i=0; i<particles.size();i++){
+
+    //find landmarks with particle sense range
+    for(int id=0;id<map_landmarks.landmark_list.size();id++){
+      if(dist(map_landmarks.landmark_list[id].x_f,map_landmarks.landmark_list[id].y_f,particles[i].x,particles[i].y)<sensor_range){
+
+        predicted[id].id = map_landmarks.landmark_list[id].id_i;
+        predicted[id].x = map_landmarks.landmark_list[id].x_f;
+        predicted[id].y = map_landmarks.landmark_list[id].y_f;
+        
+      }
+    }
+
+    //transform observations to map coordinate
+    for (int j=0;j< observations.size();j++){
+      t_obs[j].x=particles[i].x + cos(particles[i].theta)*observations[j].x - sin(particles[i].theta)*observations[j].y;
+      t_obs[j].y=particles[i].y + sin(particles[i].theta)*observations[j].x + cos(particles[i].theta)*observations[j].y;
+      t_obs[j].id=observations[j].id;      
+    }
+
+    //data associate
+    dataAssociation(predicted,t_obs);
+
+    
+    //calculate particle weight
+  
+    
+    
+    
+  for(int i=0;i<particles.size();i++){
+      int id = particles[i].associations;
+      double x_obs = observations[ass_id].x;
+      double y_obs = observations[ass_id].y;
+      double x_tobs = particles[i].sense_x[ass_id];
+      double y_tobs = particles[i].sense_y[ass_id];
+      double std_x = std_landmark[0];
+      double std_y = std_landmark[1];
+
+      particles[i].weight += (1/2*M_PI*std_x*std_y)*exp(-(pow(x_obs-x_tobs,2)/2*std_x*std_x + pow(y_obs-y_tobs,2)/2*std_y*std_y));
+    }  
+  }
 }
 
 void ParticleFilter::resample() {
