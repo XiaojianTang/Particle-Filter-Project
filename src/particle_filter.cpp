@@ -67,36 +67,34 @@ void ParticleFilter::prediction(double delta_t, double std_pos[],
    *  http://www.cplusplus.com/reference/random/default_random_engine/
    */
 
-  std::default_random_engine gen;    
-
-  //add noise to prediction
-    
+  std::default_random_engine gen; 
   std::normal_distribution<double> dist_x(0, std_pos[0]);
   std::normal_distribution<double> dist_y(0, std_pos[1]);
-  std::normal_distribution<double> dist_theta(0, std_pos[2]);
+  std::normal_distribution<double> dist_theta(0, std_pos[2]);   
 
   for(unsigned int i=0;i<num_particles;i++){   
 
     double x_pred, y_pred, theta_pred; 
 
     //assign current particle state
-    double x_0=particles[i].x;
-    double y_0=particles[i].y;
-    double theta_0=particles[i].theta;   
+    double x_=particles[i].x;
+    double y_=particles[i].y;
+    double theta_=particles[i].theta;   
     
 
     if(fabs(yaw_rate)>0.0001){
-      x_pred = x_0 + (velocity/yaw_rate)*(std::sin(theta_0+yaw_rate*delta_t) - std::sin(theta_0));
-      y_pred = y_0 + (velocity/yaw_rate)*(std::cos(theta_0) - std::cos(theta_0+yaw_rate*delta_t));
-      theta_pred = theta_0 + yaw_rate*delta_t;
+      x_pred = x_ + (velocity/yaw_rate)*(std::sin(theta_+yaw_rate*delta_t) - std::sin(theta_));
+      y_pred = y_ + (velocity/yaw_rate)*(std::cos(theta_) - std::cos(theta_+yaw_rate*delta_t));
+      theta_pred = theta_ + yaw_rate*delta_t;
     }
 
     else{
-      x_pred = x_0 + velocity*delta_t*cos(theta_0);
-      y_pred = y_0 + velocity*delta_t*sin(theta_0);
-      theta_pred = theta_0;
-    }    
-    
+      x_pred = x_ + velocity*delta_t*cos(theta_);
+      y_pred = y_ + velocity*delta_t*sin(theta_);
+      theta_pred = theta_;
+    }
+
+    //add noise to prediction   
     particles[i].x = x_pred + dist_x(gen);
     particles[i].y = y_pred + dist_y(gen);
     particles[i].theta = theta_pred + dist_theta(gen); 
@@ -120,15 +118,15 @@ void ParticleFilter::dataAssociation(vector<LandmarkObs> predicted,
     LandmarkObs obs=observations[i];
     int new_id = obs.id;
 
-    double current_euclidian_distance = std::numeric_limits<double>::max();
+    double dist_= std::numeric_limits<double>::max();
 
     for(unsigned int j=0;j<predicted.size();j++){
 
       LandmarkObs pred = predicted[j];
             
-      if(dist(obs.x,obs.y,pred.x,pred.y)<current_euclidian_distance){
+      if(dist(obs.x,obs.y,pred.x,pred.y)<dist_){
         new_id = pred.id;
-        current_euclidian_distance=dist(obs.x,obs.y,pred.x,pred.y);
+        dist_=dist(obs.x,obs.y,pred.x,pred.y);
       }     
     }
     observations[i].id = new_id;
@@ -154,79 +152,77 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
   for (unsigned int i=0; i<num_particles;i++){
 
-    double xp = particles[i].x;
-    double yp = particles[i].y;
-    double theta = particles[i].theta; 
+    double x_part = particles[i].x;
+    double y_part = particles[i].y;
+    double theta_part = particles[i].theta; 
 
-    vector<LandmarkObs> tf_observations;
+    vector<LandmarkObs> t_obs;
 
-    for (unsigned int j=0;j< observations.size();j++){      
-      LandmarkObs tf_observation;
-      double xc = observations[j].x;
-      double yc = observations[j].y;
+    for (int j=0;j< observations.size();j++){      
+      LandmarkObs transformed;
+      double x_obs = observations[j].x;
+      double y_obs = observations[j].y;
 
-      tf_observation.x = xp + (std::cos(theta)*xc) - (std::sin(theta)*yc);
-      tf_observation.y = yp + (std::sin(theta)*xc) + (std::cos(theta)*yc);
-      tf_observation.id = j;
+      transformed.x = x_part + (std::cos(theta_part)*x_obs) - (std::sin(theta_part)*y_obs);
+      transformed.y = y_part + (std::sin(theta_part)*x_obs) + (std::cos(theta_part)*y_obs);
+      transformed.id = j;
 
-      tf_observations.push_back(tf_observation);
+      t_obs.push_back(transformed);
     }    
 
     //find landmarks within particle's sensor range then assign to predicted    
-    vector<LandmarkObs> landmarks_in_range; 
+    vector<LandmarkObs> predicted; 
 
-    for(unsigned int k=0;k<map_landmarks.landmark_list.size();k++){   
-      double distance = dist(xp,yp,map_landmarks.landmark_list[k].x_f, map_landmarks.landmark_list[k].y_f);
+    for(unsigned int id=0;id<map_landmarks.landmark_list.size();id++){      
+      if(dist(x_part,y_part,map_landmarks.landmark_list[id].x_f,map_landmarks.landmark_list[id].y_f)<=sensor_range){
+        LandmarkObs landmark;
+        landmark.id = map_landmarks.landmark_list[id].id_i;
+        landmark.x = map_landmarks.landmark_list[id].x_f;
+        landmark.y = map_landmarks.landmark_list[id].y_f;
 
-      if(distance<=sensor_range){
-        LandmarkObs landmark_in_range;
-        landmark_in_range.id = map_landmarks.landmark_list[k].id_i;
-        landmark_in_range.x = map_landmarks.landmark_list[k].x_f;
-        landmark_in_range.y = map_landmarks.landmark_list[k].y_f;
-
-        landmarks_in_range.push_back(landmark_in_range);        
+        predicted.push_back(landmark);        
       }
     }    
 
     //data associate
-    dataAssociation(landmarks_in_range,tf_observations);      
+    dataAssociation(predicted,t_obs);  
+    
     
     //calculate particle weight   
 
-    double sig_x = std_landmark[0];
-    double sig_y = std_landmark[1];
-    double var_x = sig_x*sig_x;
-    double var_y = sig_y*sig_y;
-    double gaussian_norm = 1.0/(2.0*M_PI*sig_x*sig_y);
+    double var_x = std_landmark[0]*std_landmark[0];
+    double var_y = std_landmark[1]*std_landmark[1];  
+    double gaussian_norm = 1.0/(2.0*M_PI*std_landmark[0]*std_landmark[1]);
 
     particles[i].weight=1.0;
     double p_=1.0;   
 
-    for (int j=0;j<tf_observations.size();j++){
+    for (int j=0;j<t_obs.size();j++){
 
-      double tf_x = tf_observations[j].x;
-      double tf_y = tf_observations[j].y;
-      double tf_id = tf_observations[j].id;
+      double x_tobs = t_obs[j].x;
+      double y_tobs = t_obs[j].y;
+      double ass_id = t_obs[j].id;
 
-      for (int k=0;k<landmarks_in_range.size();k++){
-        double ldmk_x =landmarks_in_range[k].x;
-        double ldmk_y =landmarks_in_range[k].y;
-        double ldmk_id = landmarks_in_range[k].id;
+      for (int k=0;k<predicted.size();k++){
+        double ldmk_x =predicted[k].x;
+        double ldmk_y =predicted[k].y;
+        double ldmk_id = predicted[k].id;
 
-        if (tf_id==ldmk_id){
+        if (ass_id==ldmk_id){
           double mu_x = ldmk_x;
           double mu_y = ldmk_y;
 
-          double exp_x = ((tf_x-mu_x)*(tf_x-mu_x))/(2*var_x);
-          double exp_y = ((tf_y-mu_y)*(tf_y-mu_y))/(2*var_y);
+          double exp_x = ((x_tobs-mu_x)*(x_tobs-mu_x))/(2*var_x);
+          double exp_y = ((y_tobs-mu_y)*(y_tobs-mu_y))/(2*var_y);
 
           p_ = p_*gaussian_norm*exp(-(exp_x+exp_y));
           break;
         }
       }    
-    }    
-    particles[i].weight=p_;    
+    }
+
     weights[i] = p_;
+    particles[i].weight=p_;    
   }
 
   //normalize weights
